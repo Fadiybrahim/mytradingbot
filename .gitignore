@@ -21,3 +21,4 @@ local_settings.py
 
 # VS Code
 .vscode/
+trading_bot.log
