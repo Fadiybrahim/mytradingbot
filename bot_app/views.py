@@ -364,12 +364,12 @@ def configure_bot_view(request, config_id=None):
 
                         success_messages.append(f"Configuration for {stock_config_for_form.yf_ticker} updated successfully!")
                         created_configs.append(stock_config_for_form) # Add to list for context
-                    except ValueError as e:
-                        error_messages.append(f"Configuration error: {e}. Please correct the inputs.")
-                        logger.error(f"ValueError during save for config ID {config_id}: {e}")
-                    except Exception as e:
-                        logger.exception(f"An unexpected error occurred while saving configuration for {config_id}: {e}")
-                        error_messages.append(f"An unexpected error occurred while saving configuration: {e}")
+                except ValueError as e:
+                    error_messages.append(f"Configuration error: {e}. Please correct the inputs.")
+                    logger.error(f"ValueError during save for config ID {config_id}: {e}")
+                except Exception as e:
+                    logger.exception(f"An unexpected error occurred while saving configuration for {config_id}: {e}")
+                    error_messages.append(f"An unexpected error occurred while saving configuration: {e}")
 
         elif yf_tickers_list: # Creating new configurations from GET parameters (not editing)
             if not t212_tickers_list:
@@ -446,7 +446,7 @@ def configure_bot_view(request, config_id=None):
                         
                     except ValueError as e:
                         error_messages.append(f"Configuration error for {yf_ticker}: {e}. Skipping.")
-                        logger.error(f"ValueError during save for config ID {config_id}: {e}")
+                        logger.error(f"ValueError during save for YF ticker {yf_ticker}: {e}")
                     except Exception as e:
                         logger.exception(f"An unexpected error occurred while saving configuration for {yf_ticker}: {e}")
                         error_messages.append(f"An unexpected error occurred for {yf_ticker}: {e}")
