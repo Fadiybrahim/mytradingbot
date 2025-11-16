@@ -100,7 +100,7 @@
                         <div class="card-header">Current Stock Status for {{ yf_ticker }}</div>
                         <div class="card-body">
                             <p><strong>Real-time Price:</strong> <span id="realtime-price">{% if realtime_price %}{{ realtime_price }}{% else %}N/A{% endif %}</span></p>
-                            <p><strong>Latest Signal:</strong> <span id="latest-signal" class="badge {% if latest_signal == 'Buy' %}bg-success{% elif latest_signal == 'Sell' %}bg-danger{% else %}bg-secondary{% endif %}">{{ latest_signal }}</span></p>
+                            <p><strong>Latest Signal:</strong> <span id="latest-signal" class="badge {% if latest_signal == 'Buy' %}bg-success{% elif latest_signal == 'Sell' %}bg-danger{% else %}bg-secondary{% endif %}">{{ latest_signal|default:"N/A" }}</span></p>
                             <p><strong>Last Automated Run:</strong> <span id="last-automated-run">{{ stock_config.last_run|default:"Never"|date:"Y-m-d H:i:s" }}</span></p>
                             <p><strong>Total Realized P&L:</strong> <span id="total-realized-pnl" class="badge {% if stock_config.total_realized_pnl >= 0 %}bg-success{% else %}bg-danger{% endif %}">{{ stock_config.total_realized_pnl|default:"0.00" }}</span></p>
                             <p><strong>Auto-Trading Status:</strong> <span id="auto-trading-status" class="badge {% if is_active_for_trading %}bg-success{% else %}bg-secondary{% endif %}">{% if is_active_for_trading %}Active{% else %}Inactive{% endif %}</span></p>
@@ -148,19 +148,24 @@
                 </div>
                 <div class="col-md-6">
                     <div class="card">
-                        <div class="card-header">Current Portfolio Holding for {{ yf_ticker }}</div>
+                        <div class="card-header">
+                            Current Portfolio Holding for {{ t212_ticker }}
+                            <button id="refresh-portfolio-btn" class="btn btn-sm btn-outline-secondary float-end ms-2">Refresh</button>
+                        </div>
                         <div class="card-body">
-                            {% if portfolio_holding %}
-                                <p><strong>Shares:</strong> {{ portfolio_holding.quantity|floatformat:2 }}</p>
-                                <p><strong>Average Price:</strong> {{ portfolio_holding.average_price|floatformat:2 }} {{ portfolio_holding.currency_code }}</p>
-                                <p><strong>Current Value:</strong> {{ portfolio_holding.value|floatformat:2 }} {{ portfolio_holding.currency_code }}</p>
-                                <p><strong>Profit/Loss:</strong> <span class="badge {% if portfolio_holding.profit >= 0 %}bg-success{% else %}bg-danger{% endif %}">{{ portfolio_holding.profit|floatformat:2 }} {{ portfolio_holding.currency_code }}</span></p>
-                                {% if portfolio_holding.value_eur %}
-                                    <p><strong>Value in EUR:</strong> {{ portfolio_holding.value_eur|floatformat:2 }} EUR</p>
+                            <div id="portfolio-holding-data">
+                                {% if portfolio_holding %}
+                                    <p><strong>Shares:</strong> <span id="portfolio-shares">{{ portfolio_holding.quantity|floatformat:2 }}</span></p>
+                                    <p><strong>Average Price:</strong> <span id="portfolio-avg-price">{{ portfolio_holding.average_price|floatformat:2 }}</span> <span id="portfolio-currency">{{ portfolio_holding.currency_code }}</span></p>
+                                    <p><strong>Current Value:</strong> <span id="portfolio-current-value">{{ portfolio_holding.value|floatformat:2 }}</span> <span id="portfolio-currency-value">{{ portfolio_holding.currency_code }}</span></p>
+                                    <p><strong>Profit/Loss:</strong> <span id="portfolio-profit-loss" class="badge {% if portfolio_holding.profit >= 0 %}bg-success{% else %}bg-danger{% endif %}">{{ portfolio_holding.profit|floatformat:2 }}</span> <span id="portfolio-currency-pl">{{ portfolio_holding.currency_code }}</span></p>
+                                    {% if portfolio_holding.value_eur %}
+                                        <p><strong>Value in EUR:</strong> <span id="portfolio-value-eur">{{ portfolio_holding.value_eur|floatformat:2 }}</span> EUR</p>
+                                    {% endif %}
+                                {% else %}
+                                    <p class="text-muted">No current portfolio holding found for {{ yf_ticker }}.</p>
                                 {% endif %}
-                            {% else %}
-                                <p class="text-muted">No current portfolio holding found for {{ yf_ticker }}.</p>
-                            {% endif %}
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -172,7 +177,6 @@
                         <div class="card-header">Latest Trading Activity (Executed by Bot)</div>
                         <div class="card-body">
                             <ul class="list-group" id="latest-trades-list">
-                                {# This list will be dynamically updated by JavaScript #}
                                 {% if trades %}
                                     {% for trade in trades %}
                                         <li class="list-group-item d-flex justify-content-between align-items-center">
@@ -180,7 +184,7 @@
                                                 <strong>{{ trade.signal_generated }} {{ trade.quantity }}</strong>
                                                 {% if trade.price_at_execution %} at {{ trade.price_at_execution }} {% endif %}
                                                 ({{ trade.timestamp|date:"Y-m-d H:i:s" }})
-                                                {% if trade.realized_pnl_for_trade %}
+                                                {% if trade.realized_pnl_for_trade is not None %}
                                                     P&L: <span class="badge {% if trade.realized_pnl_for_trade >= 0 %}bg-success{% else %}bg-danger{% endif %}">{{ trade.realized_pnl_for_trade }}</span>
                                                 {% endif %}
                                             </span>
@@ -199,10 +203,7 @@
             <div class="card">
                 <div class="card-header">Candlestick Chart for {{ yf_ticker }}</div>
                 <div class="card-body text-center">
-                    <div id="candlestick-chart" style="height: 400px; width: 100%;"></div> 
-                    {% if not candlestick_plot_json %} {# Fallback/message if Plotly data not generated #}
-                        <p class="text-muted">No candlestick chart available. Ensure a valid stock symbol is provided and data can be fetched.</p>
-                    {% endif %}
+                    <div id="candlestick-chart" style="height: 400px; width: 100%;"></div>
                 </div>
             </div>
 
@@ -210,9 +211,6 @@
                 <div class="card-header">RSI Chart for {{ yf_ticker }}</div>
                 <div class="card-body text-center">
                     <div id="rsi-chart" style="height: 300px; width: 100%;"></div>
-                    {% if not rsi_plot_json %} {# Fallback/message if Plotly data not generated #}
-                        <p class="text-muted">No RSI chart available. Ensure a valid stock symbol is provided and RSI can be calculated.</p>
-                    {% endif %}
                 </div>
             </div>
 
@@ -279,13 +277,13 @@
                 })
                 .then(data => {
                     // Update simple text fields
-                    document.getElementById('realtime-price').textContent = data.realtime_price;
-                    document.getElementById('last-automated-run').textContent = data.last_run;
-                    
+                    document.getElementById('realtime-price').textContent = data.realtime_price || 'N/A';
+                    document.getElementById('last-automated-run').textContent = data.last_run || 'Never';
+
                     // Update latest signal badge
                     const latestSignalSpan = document.getElementById('latest-signal');
                     if (latestSignalSpan) {
-                        latestSignalSpan.textContent = data.latest_signal;
+                        latestSignalSpan.textContent = data.latest_signal || 'N/A';
                         latestSignalSpan.className = `badge ${
                             data.latest_signal === 'Buy' ? 'bg-success' :
                             data.latest_signal === 'Sell' ? 'bg-danger' : 'bg-secondary'
@@ -295,33 +293,49 @@
                     // Update total realized P&L badge
                     const totalPnlSpan = document.getElementById('total-realized-pnl');
                     if (totalPnlSpan) {
-                        totalPnlSpan.textContent = data.total_realized_pnl;
-                        totalPnlSpan.className = `badge ${
-                            parseFloat(data.total_realized_pnl) >= 0 ? 'bg-success' : 'bg-danger'
-                        }`;
+                        const pnl = parseFloat(data.total_realized_pnl);
+                        totalPnlSpan.textContent = isNaN(pnl) ? '0.00' : pnl.toFixed(2);
+                        totalPnlSpan.className = `badge ${pnl >= 0 ? 'bg-success' : 'bg-danger'}`;
                     }
 
                     // Update auto-trading status badge
                     const autoTradingStatusSpan = document.getElementById('auto-trading-status');
                     if (autoTradingStatusSpan) {
                         autoTradingStatusSpan.textContent = data.is_active_for_trading ? 'Active' : 'Inactive';
-                        autoTradingStatusSpan.className = `badge ${
-                            data.is_active_for_trading ? 'bg-success' : 'bg-secondary'
-                        }`;
+                        autoTradingStatusSpan.className = `badge ${data.is_active_for_trading ? 'bg-success' : 'bg-secondary'}`;
                     }
 
-                    // Update latest trades list
+                    // Update Portfolio Holding Data
+                    const portfolioHolding = data.portfolio_holding;
+                    const portfolioContainer = document.getElementById('portfolio-holding-data');
+                    if (portfolioHolding && portfolioContainer) {
+                        const profit = parseFloat(portfolioHolding.profit);
+                        const profitClass = isNaN(profit) ? 'bg-secondary' : (profit >= 0 ? 'bg-success' : 'bg-danger');
+
+                        portfolioContainer.innerHTML = `
+                            <p><strong>Shares:</strong> <span id="portfolio-shares">${portfolioHolding.quantity || '0.00'}</span></p>
+                            <p><strong>Average Price:</strong> <span id="portfolio-avg-price">${portfolioHolding.average_price || '0.00'}</span> <span id="portfolio-currency">${portfolioHolding.currency_code || ''}</span></p>
+                            <p><strong>Current Value:</strong> <span id="portfolio-current-value">${portfolioHolding.value || '0.00'}</span> <span id="portfolio-currency-value">${portfolioHolding.currency_code || ''}</span></p>
+                            <p><strong>Profit/Loss:</strong> <span id="portfolio-profit-loss" class="badge ${profitClass}">${isNaN(profit) ? 'N/A' : profit.toFixed(2)}</span> <span id="portfolio-currency-pl">${portfolioHolding.currency_code || ''}</span></p>
+                            ${portfolioHolding.value_eur ? `<p><strong>Value in EUR:</strong> <span id="portfolio-value-eur">${portfolioHolding.value_eur}</span> EUR</p>` : ''}
+                        `;
+                    } else if (portfolioContainer) {
+                        portfolioContainer.innerHTML = '<p class="text-muted">No current portfolio holding data available.</p>';
+                    }
+
+                    // Update Latest Trading Activity
                     const tradesListElement = document.getElementById('latest-trades-list');
                     if (tradesListElement) {
-                        tradesListElement.innerHTML = ''; // Clear existing trades
+                        tradesListElement.innerHTML = ''; // Clear existing list
                         if (data.trades && data.trades.length > 0) {
                             data.trades.forEach(trade => {
                                 const li = document.createElement('li');
                                 li.className = 'list-group-item d-flex justify-content-between align-items-center';
-                                
-                                const pnlBadge = trade.realized_pnl_for_trade ? 
-                                    `<span class="badge ${parseFloat(trade.realized_pnl_for_trade) >= 0 ? 'bg-success' : 'bg-danger'}">${trade.realized_pnl_for_trade}</span>` : '';
-                                
+
+                                const pnl = parseFloat(trade.realized_pnl_for_trade);
+                                const pnlBadge = !isNaN(pnl) ?
+                                    `P&L: <span class="badge ${pnl >= 0 ? 'bg-success' : 'bg-danger'}">${pnl.toFixed(2)}</span>` : '';
+
                                 const statusBadge = `<span class="badge ${
                                     trade.status === 'Success' ? 'bg-success' :
                                     trade.status === 'Failed' ? 'bg-danger' : 'bg-info'
@@ -345,54 +359,47 @@
                             tradesListElement.appendChild(p);
                         }
                     }
-
-                    // Update Price, RSI, and Signals Table
-                    const priceRsiTableContainer = document.getElementById('price-rsi-table-container');
-                    if (priceRsiTableContainer && data.price_rsi_table_html) {
-                        priceRsiTableContainer.innerHTML = data.price_rsi_table_html;
-                    }
                 })
                 .catch(error => console.error('Error fetching bot status:', error));
         }
-
+        
         document.addEventListener('DOMContentLoaded', function() {
             // Plotly Chart Rendering on initial page load
-            const candlestickPlotJsonRaw = document.getElementById('candlestick-chart').nextElementSibling ? document.getElementById('candlestick-chart').nextElementSibling.textContent : null;
-            const rsiPlotJsonRaw = document.getElementById('rsi-chart').nextElementSibling ? document.getElementById('rsi-chart').nextElementSibling.textContent : null;
-            
             let candlestickPlotJson = null;
             let rsiPlotJson = null;
 
-            // Safely parse JSON from Django context (which is HTML-escaped)
             try {
-                // The template variable is already safe, but it's embedded in a script block.
-                // We need to extract the actual JSON string from what Django outputs, which
-                // means we're parsing it directly from the hidden content it would produce.
-                // This is a bit hacky; a better way is to put it in a JS variable.
-                // For now, let's assume `candlestick_plot_json` directly holds valid JSON string.
-                if ("{{ candlestick_plot_json }}" && "{{ candlestick_plot_json }}" !== "None") {
-                    candlestickPlotJson = JSON.parse("{{ candlestick_plot_json|escapejs }}");
+                // Safely parse JSON from Django context using the 'escapejs' filter
+                const candlestickData = "{{ candlestick_plot_json|escapejs }}";
+                if (candlestickData && candlestickData !== "None") {
+                    candlestickPlotJson = JSON.parse(candlestickData);
                 }
-                if ("{{ rsi_plot_json }}" && "{{ rsi_plot_json }}" !== "None") {
-                    rsiPlotJson = JSON.parse("{{ rsi_plot_json|escapejs }}");
+                const rsiData = "{{ rsi_plot_json|escapejs }}";
+                if (rsiData && rsiData !== "None") {
+                    rsiPlotJson = JSON.parse(rsiData);
                 }
             } catch (e) {
                 console.error("Error parsing Plotly JSON from context:", e);
-                candlestickPlotJson = null; // Reset on error
-                rsiPlotJson = null;
             }
-
 
             if (candlestickPlotJson) {
                 Plotly.newPlot('candlestick-chart', candlestickPlotJson.data, candlestickPlotJson.layout);
             } else {
-                document.getElementById('candlestick-chart').innerHTML = '<p class="text-muted">No candlestick chart available.</p>';
+                document.getElementById('candlestick-chart').innerHTML = '<p class="text-muted">No candlestick chart available. Ensure a valid stock symbol is provided and data can be fetched.</p>';
             }
 
             if (rsiPlotJson) {
                 Plotly.newPlot('rsi-chart', rsiPlotJson.data, rsiPlotJson.layout);
             } else {
-                document.getElementById('rsi-chart').innerHTML = '<p class="text-muted">No RSI chart available.</p>';
+                document.getElementById('rsi-chart').innerHTML = '<p class="text-muted">No RSI chart available. Ensure a valid stock symbol is provided and RSI can be calculated.</p>';
+            }
+
+            // Add event listener for the refresh button
+            const refreshPortfolioBtn = document.getElementById('refresh-portfolio-btn');
+            if (refreshPortfolioBtn) {
+                refreshPortfolioBtn.addEventListener('click', function() {
+                    updateDashboardStatus(); // Call the function to refresh data
+                });
             }
 
             // Run AJAX update once immediately when the page loads

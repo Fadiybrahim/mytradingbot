@@ -74,3 +74,37 @@ class Trading212Instrument(models.Model):
 
     def __str__(self):
         return f"{self.shortName} ({self.ticker})"
+
+class PortfolioHolding(models.Model):
+    """Stores current portfolio holding data fetched from Trading212."""
+    # Instrument details
+    instrument_ticker = models.CharField(max_length=50, db_index=True, help_text="Trading 212 instrument ticker (e.g., AAPL_US_EQ)")
+    instrument_currency = models.CharField(max_length=10)
+    instrument_isin = models.CharField(max_length=50, blank=True, null=True)
+    instrument_name = models.CharField(max_length=255)
+    instrument_short_name = models.CharField(max_length=100)
+
+    # Holding details
+    average_price_paid = models.DecimalField(max_digits=15, decimal_places=5)
+    created_at = models.DateTimeField() # Timestamp when the position was created
+    current_price = models.DecimalField(max_digits=15, decimal_places=5)
+    quantity = models.DecimalField(max_digits=15, decimal_places=5)
+    quantity_available_for_trading = models.DecimalField(max_digits=15, decimal_places=5)
+    quantity_in_pies = models.DecimalField(max_digits=15, decimal_places=5)
+
+    # Wallet Impact details
+    wallet_impact_currency = models.CharField(max_length=10)
+    wallet_impact_current_value = models.DecimalField(max_digits=15, decimal_places=5)
+    wallet_impact_fx_impact = models.DecimalField(max_digits=15, decimal_places=5)
+    wallet_impact_total_cost = models.DecimalField(max_digits=15, decimal_places=5)
+    wallet_impact_unrealized_profit_loss = models.DecimalField(max_digits=15, decimal_places=5)
+
+    # Metadata
+    fetched_at = models.DateTimeField(default=timezone.now, help_text="Timestamp when this data was fetched from the API.")
+
+    def __str__(self):
+        return f"{self.instrument_short_name} ({self.instrument_ticker}) - Qty: {self.quantity}"
+
+    class Meta:
+        # Ensure unique holdings per instrument ticker
+        unique_together = ('instrument_ticker',)

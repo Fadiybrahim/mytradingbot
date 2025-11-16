@@ -178,11 +178,11 @@ def update_historical_data_gaps(stock_config):
         if index not in existing_timestamps:
             new_data_to_save.append({
                 'timestamp': index,
-                'open_price': row['Open'] if pd.notna(row['Open']) else None,
-                'high_price': row['High'] if pd.notna(row['High']) else None,
-                'low_price': row['Low'] if pd.notna(row['Low']) else None,
-                'close_price': row['Close'] if pd.notna(row['Close']) else None,
-                'volume': row['Volume'] if pd.notna(row['Volume']) else None,
+                'open_price': row['Open'] if 'Open' in row.index and pd.notna(row['Open']) else None,
+                'high_price': row['High'] if 'High' in row.index and pd.notna(row['High']) else None,
+                'low_price': row['Low'] if 'Low' in row.index and pd.notna(row['Low']) else None,
+                'close_price': row['Close'] if 'Close' in row.index and pd.notna(row['Close']) else None,
+                'volume': row['Volume'] if 'Volume' in row.index and pd.notna(row['Volume']) else None,
             })
     
     if not new_data_to_save:
@@ -234,11 +234,11 @@ def update_historical_data_gaps(stock_config):
             HistoricalData(
                 stock_config=stock_config,
                 timestamp=index,
-                open_price=row['Open'],
-                high_price=row['High'],
-                low_price=row['Low'],
-                close_price=row['Close'],
-                volume=row['Volume'],
+                open_price=row['Open'] if 'Open' in row.index and pd.notna(row['Open']) else None,
+                high_price=row['High'] if 'High' in row.index and pd.notna(row['High']) else None,
+                low_price=row['Low'] if 'Low' in row.index and pd.notna(row['Low']) else None,
+                close_price=row['Close'] if 'Close' in row.index and pd.notna(row['Close']) else None,
+                volume=row['Volume'] if 'Volume' in row.index and pd.notna(row['Volume']) else None,
                 rsi=rsi_val,
                 signal=signal_val,
             )
@@ -384,6 +384,13 @@ def configure_bot_view(request, config_id=None):
                     # Determine the corresponding T212 ticker
                     t212_ticker = t212_tickers_list[i % len(t212_tickers_list)].strip() if t212_tickers_list else ""
 
+                    if not yf_ticker: 
+                        logger.warning("Skipping empty YF ticker.")
+                        continue
+
+                    # Determine the corresponding T212 ticker
+                    t212_ticker = t212_tickers_list[i % len(t212_tickers_list)].strip() if t212_tickers_list else ""
+
                     if not t212_ticker:
                         error_messages.append(f"Missing Trading 212 ticker for Yahoo Finance ticker '{yf_ticker}'. Skipping.")
                         logger.warning(f"Missing T212 ticker for YF ticker '{yf_ticker}'.")
@@ -474,13 +481,17 @@ def configure_bot_view(request, config_id=None):
     # If creating new bots and it failed, we still want to show the form with submitted values.
     # If no GET tickers and no POST, we show defaults.
 
-    # Use POST values if available, otherwise initial values for form fields
-    form_yf_ticker = current_yf_ticker_post or initial_yf_ticker
-    form_t212_ticker = current_t212_ticker_post or initial_t212_ticker
+    # Determine form field values, prioritizing initial values if errors occurred during POST
+    if config_id and request.method == 'POST' and error_messages:
+        # If editing and an error occurred, revert to initial values to show the previous state
+        form_yf_ticker = initial_yf_ticker
+        form_t212_ticker = initial_t212_ticker
+    else:
+        # Otherwise, use POST values if available, otherwise initial values
+        form_yf_ticker = current_yf_ticker_post or initial_yf_ticker
+        form_t212_ticker = current_t212_ticker_post or initial_t212_ticker
     
-    # If no config_id was provided and no GET tickers were processed, and no POST data,
-    # then we are showing the initial form for manual entry.
-    # In this case, form_yf_ticker and form_t212_ticker should be empty strings if no initial values were set.
+    # Special case for initial form load without config_id and no POST data
     if not config_id and not yf_tickers_list and not request.method == 'POST':
         form_yf_ticker = ""
         form_t212_ticker = ""
@@ -753,6 +764,25 @@ def get_bot_status_json(request, config_id):
             'realized_pnl_for_trade': str(trade.realized_pnl_for_trade) if trade.realized_pnl_for_trade else None,
         })
 
+    # Fetch PortfolioHolding data
+    portfolio_holding = None
+    try:
+        # Use the trading212_ticker from stock_config to find the PortfolioHolding
+        portfolio_holding = PortfolioHolding.objects.get(ticker=stock_config.trading212_ticker)
+    except PortfolioHolding.DoesNotExist:
+        logger.warning(f"No PortfolioHolding found for ticker {stock_config.trading212_ticker}")
+    except Exception as e:
+        logger.error(f"Error fetching PortfolioHolding for {stock_config.trading212_ticker}: {e}")
+
+    portfolio_holding_data = {
+        'quantity': str(portfolio_holding.quantity) if portfolio_holding and portfolio_holding.quantity is not None else 'N/A',
+        'average_price': str(portfolio_holding.average_price) if portfolio_holding and portfolio_holding.average_price is not None else 'N/A',
+        'current_value': str(portfolio_holding.value) if portfolio_holding and portfolio_holding.value is not None else 'N/A',
+        'profit': str(portfolio_holding.profit) if portfolio_holding and portfolio_holding.profit is not None else 'N/A',
+        'currency_code': portfolio_holding.currency_code if portfolio_holding and portfolio_holding.currency_code else 'USD',
+        'value_eur': str(portfolio_holding.value_eur) if portfolio_holding and portfolio_holding.value_eur is not None else 'N/A',
+    }
+
     data = {
         'realtime_price': str(realtime_price) if realtime_price else 'N/A',
         'latest_signal': latest_signal,
@@ -761,6 +791,7 @@ def get_bot_status_json(request, config_id):
         'is_active_for_trading': stock_config.is_active_for_trading,
         'trades': trade_list,
         'price_rsi_table_html': price_rsi_table_html,
+        'portfolio_holding': portfolio_holding_data, # Add portfolio holding data
     }
     return JsonResponse(data)
 
