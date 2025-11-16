@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portfolio</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+</head>
+<body>
+    <div class="container mt-5">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h1>Portfolio Details</h1>
+            <a href="{% url 'main' %}" class="btn btn-secondary">Back to Main Menu</a>
+        </div>
+        <form method="post">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-primary mb-3">Refresh Data</button>
+        </form>
+
+        {% if error_message %}
+            <div class="alert alert-danger" role="alert">
+                {{ error_message }}
+            </div>
+        {% endif %}
+
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Ticker</th>
+                        <th>Name</th>
+                        <th>Quantity</th>
+                        <th>Avg Price</th>
+                        <th>Current Price</th>
+                        <th>Value</th>
+                        <th>Profit</th>
+                        <th>FX Profit</th>
+                        <th>Currency</th>
+                        <th>Avg Price (EUR)</th>
+                        <th>Current Price (EUR)</th>
+                        <th>Value (EUR)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for holding in holdings %}
+                    <tr>
+                        <td>{{ holding.ticker }}</td>
+                        <td>{{ holding.name }}</td>
+                        <td>{{ holding.quantity|floatformat:2 }}</td>
+                        <td>{{ holding.average_price|floatformat:2 }}</td>
+                        <td>{{ holding.current_price|floatformat:2 }}</td>
+                        <td>{{ holding.value|floatformat:2 }}</td>
+                        <td class="{% if holding.profit >= 0 %}text-success{% else %}text-danger{% endif %}">{{ holding.profit|floatformat:2 }}</td>
+                        <td class="{% if holding.fx_profit >= 0 %}text-success{% else %}text-danger{% endif %}">{{ holding.fx_profit|floatformat:2 }}</td>
+                        <td>{{ holding.currency_code }}</td>
+                        <td>{{ holding.average_price_eur|floatformat:2 }}</td>
+                        <td>{{ holding.current_price_eur|floatformat:2 }}</td>
+                        <td>{{ holding.value_eur|floatformat:2 }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="12" class="text-center">No portfolio data available. Click "Refresh Data" to fetch it.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</body>
+</html>

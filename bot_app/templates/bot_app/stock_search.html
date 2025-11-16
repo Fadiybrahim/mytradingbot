@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Search & Bot Configuration</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { padding: 20px; }
+        .card { margin-bottom: 20px; }
+        .table-scroll { max-height: 300px; overflow-y: auto; }
+        .table-primary { background-color: #cfe2ff !important; } /* Bootstrap's primary row color */
+        tr[data-symbol] { cursor: pointer; } /* Indicate rows are clickable */
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="mb-4">Search & Configure Trading Bots</h1>
+
+        {% if error_message %}
+            <div class="alert alert-danger" role="alert">
+                {{ error_message }}
+            </div>
+        {% endif %}
+        {% if not has_api_key %}
+            <div class="alert alert-warning" role="alert">
+                <strong>Warning:</strong> Trading API Key is not configured in your `.env` file. Trading actions will be simulated.
+            </div>
+        {% endif %}
+
+        <div class="card mb-4">
+            <div class="card-header">
+                Stock Search
+                <a href="{% url 'list_configured_bots' %}" class="btn btn-secondary btn-sm float-end ms-2">View All Bots</a>
+            </div>
+            <div class="card-body">
+                <p>First, search for your desired stock to find its Yahoo Finance (YF) and Trading 212 (T212) ticker symbols. Click on a row to select/deselect it.</p>
+                <form method="post" action="{% url 'stock_search' %}" id="search-form">
+                    {% csrf_token %}
+                    <div class="input-group mb-3">
+                        <input type="text" class="form-control" name="query" placeholder="Enter stock name or symbol (e.g., Apple, AAPL)" value="{{ query }}">
+                        <button class="btn btn-primary" type="submit">Search</button>
+                    </div>
+                </form>
+
+                {% if search_results.yf or search_results.t212 %}
+                    <div class="row mt-4">
+                        <div class="col-md-6">
+                            <h5>Yahoo Finance Results</h5>
+                            {% if search_results.yf %}
+                                <div class="table-scroll">
+                                    <table class="table table-sm table-hover" id="yf-results-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Symbol</th>
+                                                <th>Name</th>
+                                                <th>Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for result in search_results.yf %}
+                                                <tr data-symbol="{{ result.symbol }}" data-source="YF" data-name="{{ result.longname }}">
+                                                    <td>{{ result.symbol }}</td>
+                                                    <td>{{ result.longname }}</td>
+                                                    <td>
+                                                        <!-- This button will be hidden or repurposed -->
+                                                        <button class="btn btn-sm btn-outline-secondary select-btn">Select</button>
+                                                    </td>
+                                                </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            {% else %}
+                                <p class="text-muted">No Yahoo Finance results found for "{{ query }}".</p>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <h5>Trading 212 Instruments</h5>
+                            {% if search_results.t212 %}
+                                <div class="table-scroll">
+                                    <table class="table table-sm table-hover" id="t212-results-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Ticker</th>
+                                                <th>Name</th>
+                                                <th>Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for result in search_results.t212 %}
+                                                <tr data-symbol="{{ result.ticker }}" data-source="T212" data-name="{{ result.name }}">
+                                                    <td>{{ result.ticker }}</td>
+                                                    <td>{{ result.name }}</td>
+                                                    <td>
+                                                        <!-- This button will be hidden or repurposed -->
+                                                        <button class="btn btn-sm btn-outline-secondary select-btn">Select</button>
+                                                    </td>
+                                                </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            {% else %}
+                                <p class="text-muted">No Trading 212 instruments found for "{{ query }}".</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                {% elif query %}
+                    <p class="mt-4 text-muted">No results found for "{{ query }}" in either Yahoo Finance or Trading 212.</p>
+                {% endif %}
+
+                <hr class="my-4">
+                <h5>Manual Ticker Entry & New Bot Configuration</h5>
+                <p>You can also enter tickers manually. After selecting tickers from the lists above or entering them manually, click "Configure New Bot".</p>
+                <form method="get" action="{% url 'configure_bot_new' %}" id="configure-bot-form">
+                    <div class="row">
+                        <div class="col-md-5">
+                            <label for="manual_yf_ticker" class="form-label">Yahoo Finance Ticker:</label>
+                            <input type="text" class="form-control" id="manual_yf_ticker" name="yf_ticker" value="{{ request.GET.yf_ticker|default:'' }}">
+                        </div>
+                        <div class="col-md-5">
+                            <label for="manual_t212_ticker" class="form-label">Trading 212 Ticker:</label>
+                            <input type="text" class="form-control" id="manual_t212_ticker" name="t212_ticker" value="{{ request.GET.t212_ticker|default:'' }}">
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button type="button" id="configure-bot-button" class="btn btn-success w-100">Configure New Bot</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let selectedTickers = []; // Stores objects like { symbol: 'AAPL', source: 'YF', name: 'Apple Inc.' }
+
+        // Function to update the manual input fields based on selectedTickers
+        function updateManualInputFields() {
+            const manualYfTickerInput = document.getElementById('manual_yf_ticker');
+            const manualT212TickerInput = document.getElementById('manual_t212_ticker');
+
+            // Find the first selected YF and T212 tickers
+            const selectedYf = selectedTickers.find(t => t.source === 'YF');
+            const selectedT212 = selectedTickers.find(t => t.source === 'T212');
+
+            manualYfTickerInput.value = selectedYf ? selectedYf.symbol : '';
+            manualT212TickerInput.value = selectedT212 ? selectedT212.symbol : '';
+        }
+
+        function toggleTickerSelection(event) {
+            const row = event.currentTarget;
+            const symbol = row.dataset.symbol;
+            const source = row.dataset.source;
+            const name = row.dataset.name;
+
+            const tickerInfo = { symbol, source, name };
+            const index = selectedTickers.findIndex(t => t.symbol === symbol && t.source === source);
+
+            // Get the button element within the row
+            const selectButton = row.querySelector('.select-btn');
+
+            if (index > -1) {
+                // Deselect
+                selectedTickers.splice(index, 1);
+                row.classList.remove('table-primary');
+                selectButton.textContent = 'Select'; // Change text back to 'Select'
+                selectButton.classList.remove('btn-warning'); // Optional: change button style back
+                selectButton.classList.add('btn-outline-secondary');
+            } else {
+                // Select
+                selectedTickers.push(tickerInfo);
+                row.classList.add('table-primary');
+                selectButton.textContent = 'Deselect'; // Change text to 'Deselect'
+                selectButton.classList.remove('btn-outline-secondary'); // Optional: change button style
+                selectButton.classList.add('btn-warning');
+            }
+            console.log("Selected Tickers:", selectedTickers);
+
+            // Update manual input fields to reflect the selection
+            updateManualInputFields();
+        }
+
+        function configureBot() {
+            // Collect manually entered tickers
+            const manualYfTickerInput = document.getElementById('manual_yf_ticker');
+            const manualT212TickerInput = document.getElementById('manual_t212_ticker');
+
+            // Add manually entered tickers to selectedTickers if they are not already there
+            // This ensures that if a user types a ticker, it's also considered selected
+            if (manualYfTickerInput.value) {
+                const existingYf = selectedTickers.find(t => t.source === 'YF' && t.symbol === manualYfTickerInput.value);
+                if (!existingYf) {
+                    selectedTickers.push({ symbol: manualYfTickerInput.value, source: 'YF', name: manualYfTickerInput.value }); // Use symbol as name if not found
+                }
+            }
+            if (manualT212TickerInput.value) {
+                const existingT212 = selectedTickers.find(t => t.source === 'T212' && t.symbol === manualT212TickerInput.value);
+                if (!existingT212) {
+                    selectedTickers.push({ symbol: manualT212TickerInput.value, source: 'T212', name: manualT212TickerInput.value }); // Use symbol as name if not found
+                }
+            }
+
+            // Filter and format tickers for URL parameters
+            const yfTickers = selectedTickers.filter(t => t.source === 'YF').map(t => t.symbol).join(',');
+            const t212Tickers = selectedTickers.filter(t => t.source === 'T212').map(t => t.symbol).join(',');
+
+            let url = "{% url 'configure_bot_new' %}?";
+            if (yfTickers) {
+                url += `yf_tickers=${yfTickers}`;
+            }
+            if (t212Tickers) {
+                if (yfTickers) url += '&'; // Add separator if YF tickers exist
+                url += `t212_tickers=${t212Tickers}`;
+            }
+
+            // Redirect to the configuration page
+            window.location.href = url;
+        }
+
+        // Function to initialize the state from URL parameters on page load
+        function initializeStateFromUrl() {
+            const yfTable = document.getElementById('yf-results-table');
+            const t212Table = document.getElementById('t212-results-table');
+            const urlParams = new URLSearchParams(window.location.search);
+            const initialYfTickerFromUrl = urlParams.get('yf_ticker');
+            const initialT212TickerFromUrl = urlParams.get('t212_ticker');
+
+            // Populate input fields and update selectedTickers/visual state if tickers are present in URL
+            if (initialYfTickerFromUrl) {
+                document.getElementById('manual_yf_ticker').value = initialYfTickerFromUrl;
+                // Find the corresponding row and update its state
+                const yfRow = yfTable ? yfTable.querySelector(`tr[data-symbol="${initialYfTickerFromUrl}"]`) : null;
+                if (yfRow) {
+                    const symbol = yfRow.dataset.symbol;
+                    const source = 'YF';
+                    const name = yfRow.dataset.name;
+                    // Add to selectedTickers if not already there
+                    if (!selectedTickers.some(t => t.source === source && t.symbol === symbol)) {
+                        selectedTickers.push({ symbol, source, name });
+                    }
+                    // Update visual state
+                    yfRow.classList.add('table-primary');
+                    const selectButton = yfRow.querySelector('.select-btn');
+                    if (selectButton) {
+                        selectButton.textContent = 'Deselect';
+                        selectButton.classList.remove('btn-outline-secondary');
+                        selectButton.classList.add('btn-warning');
+                    }
+                }
+            }
+            if (initialT212TickerFromUrl) {
+                document.getElementById('manual_t212_ticker').value = initialT212TickerFromUrl;
+                const t212Row = t212Table ? t212Table.querySelector(`tr[data-symbol="${initialT212TickerFromUrl}"]`) : null;
+                if (t212Row) {
+                    const symbol = t212Row.dataset.symbol;
+                    const source = 'T212';
+                    const name = t212Row.dataset.name;
+                    if (!selectedTickers.some(t => t.source === source && t.symbol === symbol)) {
+                        selectedTickers.push({ symbol, source, name });
+                    }
+                    t212Row.classList.add('table-primary');
+                    const selectButton = t212Row.querySelector('.select-btn');
+                    if (selectButton) {
+                        selectButton.textContent = 'Deselect';
+                        selectButton.classList.remove('btn-outline-secondary');
+                        selectButton.classList.add('btn-warning');
+                    }
+                }
+            }
+            // Ensure manual fields are consistent with the final selectedTickers state after initialization
+            updateManualInputFields();
+        }
+
+        // Add event listeners to table rows
+        document.addEventListener('DOMContentLoaded', () => {
+            const yfTable = document.getElementById('yf-results-table');
+            const t212Table = document.getElementById('t212-results-table');
+            const configureButton = document.getElementById('configure-bot-button');
+
+            if (yfTable) {
+                yfTable.querySelectorAll('tbody tr').forEach(row => {
+                    row.addEventListener('click', toggleTickerSelection);
+                });
+            }
+            if (t212Table) {
+                t212Table.querySelectorAll('tbody tr').forEach(row => {
+                    row.addEventListener('click', toggleTickerSelection);
+                });
+            }
+
+            if (configureButton) {
+                configureButton.addEventListener('click', configureBot);
+            }
+
+            // Initialize the state based on URL parameters when the page loads
+            initializeStateFromUrl();
+        });
+    </script>
+</body>

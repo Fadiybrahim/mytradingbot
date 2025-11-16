@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trading Bot Dashboard - {{ yf_ticker|default:"N/A" }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Plotly.js CDN -->
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        body { padding: 20px; }
+        .card { margin-bottom: 20px; }
+        .plot-img { max-width: 100%; height: auto; border: 1px solid #ddd; } /* Fallback for static images */
+        pre { white-space: pre-wrap; word-wrap: break-word; background-color: #f8f9fa; padding: 10px; border-radius: 5px; }
+        .config-form .row { margin-bottom: 15px; }
+        .config-form .col-md-auto { margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="mb-4">Trading Bot Dashboard for {{ yf_ticker|default:"N/A" }}</h1>
+
+        {% if error_message %}
+            <div class="alert alert-danger" role="alert">
+                {{ error_message }}
+            </div>
+        {% endif %}
+        {% if success_message %}
+            <div class="alert alert-success" role="alert">
+                {{ success_message }}
+            </div>
+        {% endif %}
+        {% if info_message %}
+            <div class="alert alert-info" role="alert">
+                {{ info_message }}
+            </div>
+        {% endif %}
+        {% if not has_api_key %}
+            <div class="alert alert-warning" role="alert">
+                <strong>Warning:</strong> Trading API Key is not configured in your `.env` file. Automated trading will be simulated.
+            </div>
+        {% endif %}
+
+        <div class="card mb-4">
+            <div class="card-header">
+                Bot Configuration
+                <a href="{% url 'portfolio_detail' %}" class="btn btn-primary btn-sm float-end ms-2">View Portfolio</a>
+                <a href="{% url 'stock_search' %}" class="btn btn-secondary btn-sm float-end ms-2">Back to Search</a>
+                <a href="{% url 'list_configured_bots' %}" class="btn btn-info btn-sm float-end">View All Bots</a>
+            </div>
+            <div class="card-body">
+                <form method="post" class="config-form">
+                    {% csrf_token %}
+                    <input type="hidden" id="config-id-hidden" name="config_id" value="{{ stock_config.id|default:'' }}">
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-3">
+                            <label for="yf_ticker" class="form-label">Yahoo Finance Ticker:</label>
+                            <input type="text" class="form-control" id="yf_ticker" name="yf_ticker" value="{{ yf_ticker|default:'' }}" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="t212_ticker" class="form-label">Trading 212 Ticker:</label>
+                            <input type="text" class="form-control" id="t212_ticker" name="t212_ticker" value="{{ t212_ticker|default:'' }}" required>
+                        </div>
+                        <div class="col-md-auto">
+                            <label for="rsi_window" class="form-label">RSI Window:</label>
+                            <input type="number" class="form-control" id="rsi_window" name="rsi_window" value="{{ rsi_window }}" required min="1">
+                        </div>
+                        <div class="col-md-auto">
+                            <label for="buy_threshold" class="form-label">Buy Threshold:</label>
+                            <input type="number" class="form-control" id="buy_threshold" name="buy_threshold" value="{{ buy_threshold }}" required min="0" max="100">
+                        </div>
+                        <div class="col-md-auto">
+                            <label for="sell_threshold" class="form-label">Sell Threshold:</label>
+                            <input type="number" class="form-control" id="sell_threshold" name="sell_threshold" value="{{ sell_threshold }}" required min="0" max="100">
+                        </div>
+                        <div class="col-md-auto">
+                            <label for="trade_quantity" class="form-label">Trade Quantity:</label>
+                            <input type="number" class="form-control" id="trade_quantity" name="trade_quantity" value="{{ trade_quantity }}" required min="1">
+                        </div>
+                        <div class="col-md-auto">
+                            <label for="allocated_funds" class="form-label">Allocated Funds:</label>
+                            <input type="number" class="form-control" id="allocated_funds" name="allocated_funds" value="{{ allocated_funds|default:'0.0' }}" min="0" step="0.01">
+                        </div>
+                        <div class="col-md-auto form-check form-switch ms-3">
+                            <input class="form-check-input" type="checkbox" id="is_active_for_trading" name="is_active_for_trading" {% if is_active_for_trading %}checked{% endif %}>
+                            <label class="form-check-label" for="is_active_for_trading">Enable Auto-Trading (via scheduler)</label>
+                        </div>
+                        <div class="col-12 text-end">
+                            <button type="submit" class="btn btn-success btn-lg">Save Configuration & Run Analysis</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        {% if yf_ticker and t212_ticker %}
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">Current Stock Status for {{ yf_ticker }}</div>
+                        <div class="card-body">
+                            <p><strong>Real-time Price:</strong> <span id="realtime-price">{% if realtime_price %}{{ realtime_price }}{% else %}N/A{% endif %}</span></p>
+                            <p><strong>Latest Signal:</strong> <span id="latest-signal" class="badge {% if latest_signal == 'Buy' %}bg-success{% elif latest_signal == 'Sell' %}bg-danger{% else %}bg-secondary{% endif %}">{{ latest_signal }}</span></p>
+                            <p><strong>Last Automated Run:</strong> <span id="last-automated-run">{{ stock_config.last_run|default:"Never"|date:"Y-m-d H:i:s" }}</span></p>
+                            <p><strong>Total Realized P&L:</strong> <span id="total-realized-pnl" class="badge {% if stock_config.total_realized_pnl >= 0 %}bg-success{% else %}bg-danger{% endif %}">{{ stock_config.total_realized_pnl|default:"0.00" }}</span></p>
+                            <p><strong>Auto-Trading Status:</strong> <span id="auto-trading-status" class="badge {% if is_active_for_trading %}bg-success{% else %}bg-secondary{% endif %}">{% if is_active_for_trading %}Active{% else %}Inactive{% endif %}</span></p>
+                            
+                            <hr>
+                            <h5>Manual Trade</h5>
+                            {% if stock_config.id %}
+                                <p><strong>Trading 212 Ticker:</strong> <code>{{ t212_ticker }}</code></p>
+                                <div class="d-flex gap-2 align-items-end">
+                                    <div class="flex-grow-1">
+                                        <label for="manual_trade_quantity" class="form-label">Manual Quantity:</label>
+                                        <input type="number" class="form-control" id="manual_trade_quantity" name="quantity" value="1" min="1" step="any">
+                                    </div>
+                                    <form action="{% url 'manual_trade' config_id=stock_config.id order_type='buy' %}" method="post" class="d-inline-block">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="quantity" class="manual-trade-quantity-input">
+                                        <button type="submit" class="btn btn-success">Buy Shares</button>
+                                    </form>
+                                    <form action="{% url 'manual_trade' config_id=stock_config.id order_type='sell' %}" method="post" class="d-inline-block">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="quantity" class="manual-trade-quantity-input">
+                                        <button type="submit" class="btn btn-danger">Sell Shares</button>
+                                    </form>
+                                </div>
+                                <script>
+                                    document.addEventListener('DOMContentLoaded', function() {
+                                        const manualQuantityInput = document.getElementById('manual_trade_quantity');
+                                        const hiddenQuantityInputs = document.querySelectorAll('.manual-trade-quantity-input');
+
+                                        function updateHiddenQuantities() {
+                                            hiddenQuantityInputs.forEach(input => {
+                                                input.value = manualQuantityInput.value;
+                                            });
+                                        }
+
+                                        manualQuantityInput.addEventListener('input', updateHiddenQuantities);
+                                        updateHiddenQuantities(); // Set initial value
+                                    });
+                                </script>
+                            {% else %}
+                                <p class="text-muted">Save the bot configuration first to enable manual trading.</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">Current Portfolio Holding for {{ yf_ticker }}</div>
+                        <div class="card-body">
+                            {% if portfolio_holding %}
+                                <p><strong>Shares:</strong> {{ portfolio_holding.quantity|floatformat:2 }}</p>
+                                <p><strong>Average Price:</strong> {{ portfolio_holding.average_price|floatformat:2 }} {{ portfolio_holding.currency_code }}</p>
+                                <p><strong>Current Value:</strong> {{ portfolio_holding.value|floatformat:2 }} {{ portfolio_holding.currency_code }}</p>
+                                <p><strong>Profit/Loss:</strong> <span class="badge {% if portfolio_holding.profit >= 0 %}bg-success{% else %}bg-danger{% endif %}">{{ portfolio_holding.profit|floatformat:2 }} {{ portfolio_holding.currency_code }}</span></p>
+                                {% if portfolio_holding.value_eur %}
+                                    <p><strong>Value in EUR:</strong> {{ portfolio_holding.value_eur|floatformat:2 }} EUR</p>
+                                {% endif %}
+                            {% else %}
+                                <p class="text-muted">No current portfolio holding found for {{ yf_ticker }}.</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-12">
+                    <div class="card">
+                        <div class="card-header">Latest Trading Activity (Executed by Bot)</div>
+                        <div class="card-body">
+                            <ul class="list-group" id="latest-trades-list">
+                                {# This list will be dynamically updated by JavaScript #}
+                                {% if trades %}
+                                    {% for trade in trades %}
+                                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                                            <span>
+                                                <strong>{{ trade.signal_generated }} {{ trade.quantity }}</strong>
+                                                {% if trade.price_at_execution %} at {{ trade.price_at_execution }} {% endif %}
+                                                ({{ trade.timestamp|date:"Y-m-d H:i:s" }})
+                                                {% if trade.realized_pnl_for_trade %}
+                                                    P&L: <span class="badge {% if trade.realized_pnl_for_trade >= 0 %}bg-success{% else %}bg-danger{% endif %}">{{ trade.realized_pnl_for_trade }}</span>
+                                                {% endif %}
+                                            </span>
+                                            <span class="badge {% if trade.status == 'Success' %}bg-success{% elif trade.status == 'Failed' %}bg-danger{% else %}bg-info{% endif %}">{{ trade.status }}</span>
+                                        </li>
+                                    {% endfor %}
+                                {% else %}
+                                    <p class="text-muted">No recent trades for this stock (only Buy/Sell signals are logged here).</p>
+                                {% endif %}
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">Candlestick Chart for {{ yf_ticker }}</div>
+                <div class="card-body text-center">
+                    <div id="candlestick-chart" style="height: 400px; width: 100%;"></div> 
+                    {% if not candlestick_plot_json %} {# Fallback/message if Plotly data not generated #}
+                        <p class="text-muted">No candlestick chart available. Ensure a valid stock symbol is provided and data can be fetched.</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">RSI Chart for {{ yf_ticker }}</div>
+                <div class="card-body text-center">
+                    <div id="rsi-chart" style="height: 300px; width: 100%;"></div>
+                    {% if not rsi_plot_json %} {# Fallback/message if Plotly data not generated #}
+                        <p class="text-muted">No RSI chart available. Ensure a valid stock symbol is provided and RSI can be calculated.</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">Price, RSI, and Signals Table (Last 20 entries)</div>
+                <div class="card-body">
+                    <div class="table-responsive" id="price-rsi-table-container">
+                        {% if price_rsi_table %}
+                            {{ price_rsi_table|safe }}
+                        {% else %}
+                            <p class="text-muted">No data for Price, RSI, and Signals table.</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">Latest News for {{ yf_ticker }}</div>
+                <div class="card-body">
+                    {% if news %}
+                        <ul class="list-group list-group-flush">
+                            {% for article in news %}
+                                <li class="list-group-item">
+                                    <a href="{{ article.link }}" target="_blank" rel="noopener noreferrer">{{ article.title }}</a> - {{ article.publisher }}
+                                    <small class="text-muted d-block">{{ article.providerPublishTime|date:"Y-m-d H:i" }}</small>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <p class="text-muted">No news available for {{ yf_ticker }}.</p>
+                    {% endif %}
+                </div>
+            </div>
+        {% else %}
+            <div class="alert alert-info mt-4" role="alert">
+                Please enter and save the Yahoo Finance and Trading 212 tickers above to view the analysis dashboard.
+            </div>
+        {% endif %}
+
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- AJAX SCRIPT FOR DYNAMIC UPDATES -->
+    <script>
+        function updateDashboardStatus() {
+            const configIdElement = document.getElementById('config-id-hidden');
+            if (!configIdElement) {
+                console.warn("Hidden config ID element not found. AJAX updates skipped.");
+                return;
+            }
+            const configId = configIdElement.value;
+            if (!configId) {
+                console.warn("Config ID is empty. AJAX updates skipped.");
+                return;
+            }
+
+            fetch(`/api/bot-status/${configId}/`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    // Update simple text fields
+                    document.getElementById('realtime-price').textContent = data.realtime_price;
+                    document.getElementById('last-automated-run').textContent = data.last_run;
+                    
+                    // Update latest signal badge
+                    const latestSignalSpan = document.getElementById('latest-signal');
+                    if (latestSignalSpan) {
+                        latestSignalSpan.textContent = data.latest_signal;
+                        latestSignalSpan.className = `badge ${
+                            data.latest_signal === 'Buy' ? 'bg-success' :
+                            data.latest_signal === 'Sell' ? 'bg-danger' : 'bg-secondary'
+                        }`;
+                    }
+
+                    // Update total realized P&L badge
+                    const totalPnlSpan = document.getElementById('total-realized-pnl');
+                    if (totalPnlSpan) {
+                        totalPnlSpan.textContent = data.total_realized_pnl;
+                        totalPnlSpan.className = `badge ${
+                            parseFloat(data.total_realized_pnl) >= 0 ? 'bg-success' : 'bg-danger'
+                        }`;
+                    }
+
+                    // Update auto-trading status badge
+                    const autoTradingStatusSpan = document.getElementById('auto-trading-status');
+                    if (autoTradingStatusSpan) {
+                        autoTradingStatusSpan.textContent = data.is_active_for_trading ? 'Active' : 'Inactive';
+                        autoTradingStatusSpan.className = `badge ${
+                            data.is_active_for_trading ? 'bg-success' : 'bg-secondary'
+                        }`;
+                    }
+
+                    // Update latest trades list
+                    const tradesListElement = document.getElementById('latest-trades-list');
+                    if (tradesListElement) {
+                        tradesListElement.innerHTML = ''; // Clear existing trades
+                        if (data.trades && data.trades.length > 0) {
+                            data.trades.forEach(trade => {
+                                const li = document.createElement('li');
+                                li.className = 'list-group-item d-flex justify-content-between align-items-center';
+                                
+                                const pnlBadge = trade.realized_pnl_for_trade ? 
+                                    `<span class="badge ${parseFloat(trade.realized_pnl_for_trade) >= 0 ? 'bg-success' : 'bg-danger'}">${trade.realized_pnl_for_trade}</span>` : '';
+                                
+                                const statusBadge = `<span class="badge ${
+                                    trade.status === 'Success' ? 'bg-success' :
+                                    trade.status === 'Failed' ? 'bg-danger' : 'bg-info'
+                                }">${trade.status}</span>`;
+
+                                li.innerHTML = `
+                                    <span>
+                                        <strong>${trade.signal_generated} ${trade.quantity}</strong>
+                                        ${trade.price_at_execution ? ` at ${trade.price_at_execution}` : ''}
+                                        (${trade.timestamp})
+                                        ${pnlBadge}
+                                    </span>
+                                    ${statusBadge}
+                                `;
+                                tradesListElement.appendChild(li);
+                            });
+                        } else {
+                            const p = document.createElement('p');
+                            p.className = 'text-muted';
+                            p.textContent = 'No recent trades for this stock (only Buy/Sell signals are logged here).';
+                            tradesListElement.appendChild(p);
+                        }
+                    }
+
+                    // Update Price, RSI, and Signals Table
+                    const priceRsiTableContainer = document.getElementById('price-rsi-table-container');
+                    if (priceRsiTableContainer && data.price_rsi_table_html) {
+                        priceRsiTableContainer.innerHTML = data.price_rsi_table_html;
+                    }
+                })
+                .catch(error => console.error('Error fetching bot status:', error));
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            // Plotly Chart Rendering on initial page load
+            const candlestickPlotJsonRaw = document.getElementById('candlestick-chart').nextElementSibling ? document.getElementById('candlestick-chart').nextElementSibling.textContent : null;
+            const rsiPlotJsonRaw = document.getElementById('rsi-chart').nextElementSibling ? document.getElementById('rsi-chart').nextElementSibling.textContent : null;
+            
+            let candlestickPlotJson = null;
+            let rsiPlotJson = null;
+
+            // Safely parse JSON from Django context (which is HTML-escaped)
+            try {
+                // The template variable is already safe, but it's embedded in a script block.
+                // We need to extract the actual JSON string from what Django outputs, which
+                // means we're parsing it directly from the hidden content it would produce.
+                // This is a bit hacky; a better way is to put it in a JS variable.
+                // For now, let's assume `candlestick_plot_json` directly holds valid JSON string.
+                if ("{{ candlestick_plot_json }}" && "{{ candlestick_plot_json }}" !== "None") {
+                    candlestickPlotJson = JSON.parse("{{ candlestick_plot_json|escapejs }}");
+                }
+                if ("{{ rsi_plot_json }}" && "{{ rsi_plot_json }}" !== "None") {
+                    rsiPlotJson = JSON.parse("{{ rsi_plot_json|escapejs }}");
+                }
+            } catch (e) {
+                console.error("Error parsing Plotly JSON from context:", e);
+                candlestickPlotJson = null; // Reset on error
+                rsiPlotJson = null;
+            }
+
+
+            if (candlestickPlotJson) {
+                Plotly.newPlot('candlestick-chart', candlestickPlotJson.data, candlestickPlotJson.layout);
+            } else {
+                document.getElementById('candlestick-chart').innerHTML = '<p class="text-muted">No candlestick chart available.</p>';
+            }
+
+            if (rsiPlotJson) {
+                Plotly.newPlot('rsi-chart', rsiPlotJson.data, rsiPlotJson.layout);
+            } else {
+                document.getElementById('rsi-chart').innerHTML = '<p class="text-muted">No RSI chart available.</p>';
+            }
+
+            // Run AJAX update once immediately when the page loads
+            updateDashboardStatus(); 
+            // Then run every 60 seconds (60000 milliseconds)
+            setInterval(updateDashboardStatus, 60000); 
+        });
+    </script>
+</body>
+</html>

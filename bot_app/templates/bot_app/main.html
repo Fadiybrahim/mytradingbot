@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trading Bot</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f8f9fa;
+        }
+        .container {
+            text-align: center;
+        }
+        .btn {
+            margin: 10px;
+            min-width: 200px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="mb-4">Trading Bot</h1>
+        <a href="{% url 'portfolio_detail' %}" class="btn btn-primary btn-lg">View Portfolio</a>
+        <a href="{% url 'stock_search' %}" class="btn btn-success btn-lg">Create New Bot</a>
+        <a href="{% url 'list_configured_bots' %}" class="btn btn-info btn-lg">View All Bots</a>
+    </div>
+</body>
+</html>

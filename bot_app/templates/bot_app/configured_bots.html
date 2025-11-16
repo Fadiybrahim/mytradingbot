@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configured Trading Bots</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { padding: 20px; }
+        .card { margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="mb-4">All Configured Trading Bots</h1>
+        <a href="{% url 'stock_search' %}" class="btn btn-primary mb-3">Add New Bot / Search Stocks</a>
+        <a href="{% url 'main' %}" class="btn btn-secondary mb-3 ms-2">Back to Home</a>
+
+        <div class="card">
+            <div class="card-header">Bot List</div>
+            <div class="card-body">
+                {% if configured_stocks %}
+                    <ul class="list-group">
+                        {% for config in configured_stocks %}
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <span>
+                                    <strong>{{ config.yf_ticker }}</strong> (T212: {{ config.trading212_ticker }})
+                                    - P&L: <span class="badge {% if config.total_realized_pnl >= 0 %}bg-success{% else %}bg-danger{% endif %}">{{ config.total_realized_pnl|default:"0.00" }}</span>
+                                    - Last Run: {{ config.last_run|default:"Never"|date:"Y-m-d H:i:s" }}
+                                </span>
+                                <div>
+                                    <form method="post" action="{% url 'toggle_trading_status' config.id %}" class="d-inline">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-sm {% if config.is_active_for_trading %}btn-warning{% else %}btn-success{% endif %}">
+                                            {% if config.is_active_for_trading %}Deactivate{% else %}Activate{% endif %} Auto-Trading
+                                        </button>
+                                    </form>
+                                    <a href="{% url 'configure_bot' config_id=config.id %}" class="btn btn-sm btn-info ms-2">View/Edit</a>
+                                </div>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p class="text-muted">No bots configured yet. Use the search or manual entry from the "Add New Bot" button to get started.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
