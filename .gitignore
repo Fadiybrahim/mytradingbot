@@ -24,3 +24,5 @@ local_settings.py
 trading_bot.log
 requirements copy.txt
 trading_bot.log
+trading_bot.log
+db.sqlite3
