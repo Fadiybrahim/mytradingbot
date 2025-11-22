@@ -23,3 +23,4 @@ local_settings.py
 .vscode/
 trading_bot.log
 requirements copy.txt
+trading_bot.log
