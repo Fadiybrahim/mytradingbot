@@ -38,5 +38,6 @@ urllib3==2.2.3
 certifi==2024.8.30
 charset-normalizer==3.3.2
 idna==3.10
+plotly==5.22.0   
 
 
