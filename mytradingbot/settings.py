@@ -8,9 +8,19 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-k%^9o$i591k7c(43x)j0w!g=v8(f*^&j=1s31@t_m3_p%^g8h') # Replace with a strong, secret key in production
 
-DEBUG = os.getenv('DJANGO_DEBUG', 'True') == 'True' # Set to False in production
+# Set DEBUG to False if RENDER environment variable is present (indicating production)
+DEBUG = os.getenv('DJANGO_DEBUG', 'True') == 'True' and not os.getenv('RENDER')
 
-ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "").split(",") if not DEBUG else []
+ALLOWED_HOSTS = []
+if not DEBUG:
+    ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "").split(",")
+    # Ensure the Render domain is always included in production
+    render_domain = 'mytradingbot-f3re.onrender.com'
+    if render_domain not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(render_domain)
+else:
+    # For local development, still allow from env or keep empty for default behavior
+    ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "").split(",") if os.getenv("ALLOWED_HOSTS") else []
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -85,9 +95,11 @@ USE_I18N = True
 USE_TZ = True # <--- Crucial for Django's timezone awareness
 
 STATIC_URL = '/static/'
-STATICFILES_DIRS = [
-    os.path.join(BASE_DIR, 'static'),
-]
+# STATICFILES_DIRS is typically used for project-wide static assets not tied to a specific app.
+# Given the structure, relying on APP_DIRS for app-specific static files is more appropriate.
+# STATICFILES_DIRS = [
+#     os.path.join(BASE_DIR, 'static'),
+# ]
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage' # Configure WhiteNoise storage
