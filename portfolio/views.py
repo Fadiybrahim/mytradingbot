@@ -5,6 +5,7 @@ import os
 import base64 # Import base64 for encoding
 from dotenv import load_dotenv
 from .models import PortfolioHolding
+from trading_core.models import Trading212Instrument # Import Trading212Instrument
 import json # Import json for serializing data
 from django.http import JsonResponse # Import JsonResponse
 from google import genai
@@ -54,10 +55,19 @@ def portfolio_view(request):
             data_portfolio = response_portfolio.json()
             df_portfolio = pd.DataFrame(data_portfolio)
 
-            response_instruments = requests.get(url_instruments, headers=headers)
-            response_instruments.raise_for_status()
-            data_instruments = response_instruments.json()
-            df_instruments = pd.DataFrame(data_instruments)
+            # Fetch instrument data from the database
+            instruments_from_db = Trading212Instrument.objects.all().values()
+            df_instruments = pd.DataFrame(list(instruments_from_db))
+            # Ensure column names match the expected API response for merging
+            df_instruments.rename(columns={
+                'name': 'shortName', # The API returns 'shortName', DB has 'name'
+                'type': 'type', # The API returns 'type', DB has 'type'
+                'currencyCode': 'currencyCode', # The API returns 'currencyCode', DB has 'currencyCode'
+                'workingScheduleId': 'workingScheduleId', # The API returns 'workingScheduleId', DB has 'workingScheduleId'
+                'isin': 'isin', # The API returns 'isin', DB has 'isin'
+                'maxOpenQuantity': 'maxOpenQuantity', # The API returns 'maxOpenQuantity', DB has 'maxOpenQuantity'
+                'addedOn': 'addedOn', # The API returns 'addedOn', DB has 'addedOn'
+            }, inplace=True)
 
             # --- Process and merge the data using Pandas ---
             df_portfolio['value'] = df_portfolio['quantity'] * df_portfolio['currentPrice']
