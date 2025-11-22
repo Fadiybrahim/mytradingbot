@@ -261,10 +261,9 @@ def generate_analysis_view(request):
         df_merged_for_prompt = df_portfolio_holdings[required_cols].copy()
         
         # Convert DataFrame to JSON string for the prompt.
-        # Using to_json with orient='records' and lines=True to ensure a format that's less likely to
-        # conflict with f-string formatting and is more structured for the LLM.
-        # We will use a placeholder for the JSON data within the prompt and then format it.
-        portfolio_data_json = df_merged_for_prompt.to_json(orient='records', lines=True)
+        # Using to_json with orient='records' to produce a JSON array of records.
+        # This is a more standard JSON format than JSON Lines and should be parsable by Gemini.
+        portfolio_data_json = df_merged_for_prompt.to_json(orient='records')
         print("DataFrame converted to JSON string for prompt.")
 
         # Gemini API Configuration
@@ -348,15 +347,16 @@ def generate_analysis_view(request):
         * Key Threats: (e.g., "Inflationary pressures," "Geopolitical instability").
         * Proposed Actions/Adjustments (if any): (e.g., "Consider rebalancing towards fixed income," "Increase exposure to value stocks," "Monitor specific underperforming assets").
 
-        Your response must be JSON formatted as:
-        {
-            "Executive Summary": {...},
-            "Portfolio Holdings Overview": {...},
-            "Performance Analysis": {...},
-            "Asset Allocation": {...},
-            "Risk Analysis": {...},
-            "Future Outlook & Recommendations": {...}
-        }
+
+        Your response MUST be JSON formatted exactly as follows:
+        {{
+            "Executive Summary": {{}},
+            "Portfolio Holdings Overview": {{}},
+            "Performance Analysis": {{}},
+            "Asset Allocation": {{}},
+            "Risk Analysis": {{}},
+            "Future Outlook & Recommendations": {{}}
+        }}
         """
         # Use a placeholder for the JSON data to avoid issues with curly braces within the JSON itself.
         # The actual JSON data will be passed as a separate argument to format().
