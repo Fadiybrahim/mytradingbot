@@ -31,7 +31,7 @@ def portfolio_view(request):
 
     # URLs for the Trading 212 API
     url_portfolio = "https://demo.trading212.com/api/v0/equity/portfolio"
-    url_instruments = "https://demo.trading212.com/api/v0/equity/metadata/instruments"
+ 
 
     # --- Start of Data Fetching and Processing Logic ---
     # This block runs if it's a POST request (from the refresh button) or if it's a GET request and the database is empty.

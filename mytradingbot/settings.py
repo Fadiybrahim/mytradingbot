@@ -6,11 +6,11 @@ import dj_database_url
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = 'django-insecure-k%^9o$i591k7c(43x)j0w!g=v8(f*^&j=1s31@t_m3_p%^g8h' # Replace with a strong, secret key in production
+SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-k%^9o$i591k7c(43x)j0w!g=v8(f*^&j=1s31@t_m3_p%^g8h') # Replace with a strong, secret key in production
 
-DEBUG = True # Set to False in production
+DEBUG = os.getenv('DJANGO_DEBUG', 'True') == 'True' # Set to False in production
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "").split(",") if not DEBUG else []
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -26,6 +26,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware', # Add WhiteNoise for static files
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -55,10 +56,10 @@ TEMPLATES = [
 WSGI_APPLICATION = 'mytradingbot.wsgi.application'
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+    'default': dj_database_url.config(
+        default=f'sqlite:///{BASE_DIR / "db.sqlite3"}',
+        conn_max_age=600
+    )
 }
 
 AUTH_PASSWORD_VALIDATORS = [
@@ -88,6 +89,8 @@ STATICFILES_DIRS = [
     os.path.join(BASE_DIR, 'static'),
 ]
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage' # Configure WhiteNoise storage
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 

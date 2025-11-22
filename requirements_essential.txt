@@ -1,0 +1,39 @@
+# Django Core
+Django==5.1.6
+asgiref==3.8.1
+sqlparse==0.5.3
+
+# Deployment
+gunicorn==21.2.0
+dj-database-url==2.1.0
+psycopg2-binary==2.9.9
+whitenoise==6.7.0
+python-dotenv==1.0.1
+
+# Data and API Interaction
+numpy==1.26.4
+pandas==2.2.2
+requests==2.32.3
+yfinance==0.2.66
+beautifulsoup4==4.14.2
+trading212-api==0.2.1
+
+# Google Generative AI
+google-generativeai==0.4.1
+google-ai-generativelanguage==0.4.0
+google-api-core==2.28.0
+google-auth==2.41.1
+googleapis-common-protos==1.71.0
+grpcio==1.76.0
+protobuf==4.25.8
+tqdm==4.67.1
+
+# Core Dependencies for the above packages
+python-dateutil==2.9.0.post0
+pytz==2024.1
+six==1.16.0
+tzdata==2024.1
+urllib3==2.2.3
+certifi==2024.8.30
+charset-normalizer==3.3.2
+idna==3.10
