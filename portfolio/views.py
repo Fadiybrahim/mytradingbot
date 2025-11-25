@@ -54,13 +54,16 @@ def portfolio_view(request):
             response_portfolio.raise_for_status()  # Raise an exception for bad status codes (e.g., 401, 500)
             data_portfolio = response_portfolio.json()
             df_portfolio = pd.DataFrame(data_portfolio)
+            # Rename 'name' column from df_portfolio to 'instrumentName' to avoid conflict with 'shortName' from df_instruments
+            if 'name' in df_portfolio.columns:
+                df_portfolio.rename(columns={'name': 'instrumentName'}, inplace=True)
 
             # Fetch instrument data from the database
             instruments_from_db = Trading212Instrument.objects.all().values()
             df_instruments = pd.DataFrame(list(instruments_from_db))
             # Ensure column names match the expected API response for merging
             df_instruments.rename(columns={
-                'name': 'shortName', # The API returns 'shortName', DB has 'name'
+                'instrumentName': 'shortName', # The API returns 'shortName', DB has 'name'
                 'type': 'type', # The API returns 'type', DB has 'type'
                 'currencyCode': 'currencyCode', # The API returns 'currencyCode', DB has 'currencyCode'
                 'workingScheduleId': 'workingScheduleId', # The API returns 'workingScheduleId', DB has 'workingScheduleId'
@@ -118,7 +121,7 @@ def portfolio_view(request):
             for _, row in df_merged.iterrows():
                 PortfolioHolding.objects.create(
                     ticker=row.get('ticker'),
-                    name=row.get('name'),
+                    name=row.get('shortName'), # Use 'shortName' from df_instruments for the PortfolioHolding name
                     quantity=row.get('quantity'),
                     average_price=row.get('averagePrice'),
                     current_price=row.get('currentPrice'),
@@ -452,5 +455,5 @@ def generate_analysis_view(request):
         return JsonResponse({'error': f'An unexpected server error occurred: {e}'}, status=500)
 
 # --- Existing portfolio_view function remains unchanged ---
-# (The rest of the portfolio_view function code is omitted here for brevity but is present in the file)
+# (The rest of portfolio_view function code is omitted here for brevity but is present in the file)
 # ... (rest of portfolio_view function) ...

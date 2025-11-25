@@ -30,6 +30,8 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 
 TRADING_API_KEY = os.getenv('TRADING_API_KEY')
+
+TRADING_API_SECRET = os.getenv('TRADING_API_SECRET') # Load the secret key
 TRADING_212_ORDERS_URL = "https://demo.trading212.com/api/v0/equity/orders/market"
 
 def execute_automated_trading_task():
@@ -40,7 +42,8 @@ def execute_automated_trading_task():
     """
     logger.info(f"[{django_timezone.now()}] Starting automated trading run...")
 
-    headers = {"Authorization": TRADING_API_KEY} if TRADING_API_KEY else {}
+    # headers = {"Authorization": TRADING_API_KEY} if TRADING_API_KEY else {}
+    
     is_simulation_mode = not TRADING_API_KEY
 
     active_configs = ConfiguredStock.objects.filter(is_active_for_trading=True)
@@ -143,9 +146,10 @@ def execute_automated_trading_task():
                         "quantity": config.trade_quantity,
                         "ticker": config.trading212_ticker,
                     }
+                    logger.debug(f"DEBUG: hist DataFrame is empty for {config.trade_quantity}.")
                     if not is_simulation_mode:
                         try:
-                            response = requests.post(TRADING_212_ORDERS_URL, json=payload, headers=headers, timeout=10)
+                            response = requests.post(TRADING_212_ORDERS_URL, json=payload, auth=(TRADING_API_KEY,TRADING_API_SECRET), timeout=10)
                             response.raise_for_status()
                             trade_response_text = response.text
                             response_json = response.json()

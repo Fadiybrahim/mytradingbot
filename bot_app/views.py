@@ -553,12 +553,20 @@ def configure_bot_view(request, config_id=None):
             candlestick_plot_json = None
             rsi_plot_json = None
 
-            if not hist.empty and not hist[['Open', 'High', 'Low', 'Close']].isnull().all().all():
+            if hist.empty:
+                logger.debug(f"DEBUG: hist DataFrame is empty for {stock_config_for_form.yf_ticker}.")
+                candlestick_plot_json = None
+            elif hist[['Open', 'High', 'Low', 'Close']].isnull().all().all():
+                logger.debug(f"DEBUG: Open, High, Low, Close columns are all null for {stock_config_for_form.yf_ticker}. hist:\n{hist.to_string()}")
+                candlestick_plot_json = None
+            else:
+                logger.debug(f"DEBUG: hist DataFrame before fig_candle for {stock_config_for_form.yf_ticker}:\n{hist.to_string()}")
                 fig_candle = go.Figure(data=[go.Candlestick(
                     x=hist.index, open=hist['Open'], high=hist['High'], low=hist['Low'], close=hist['Close']
                 )])
                 fig_candle.update_layout(title=f'{stock_config_for_form.yf_ticker} 5-Minute Candles', xaxis_rangeslider_visible=False, template="plotly_dark", height=400)
                 candlestick_plot_json = json.dumps(fig_candle.to_dict(), cls=NpEncoder)
+                logger.debug(f"DEBUG: candlestick_plot_json generated for {stock_config_for_form.yf_ticker}.")
                 
             if context.get('rsi_calculated') and hist['RSI'].notna().any():
                 fig_rsi = go.Figure(data=[go.Scatter(x=hist.index, y=hist['RSI'], mode='lines', name='RSI')])
